@@ -1,17 +1,26 @@
 import random
 
-qdict = {}
+qdict = {'x': {}, 'o': {}}
+#qdict = {'x': [[ ]], 'o': {}}
+#qdict['x'][0][0][(board)]
+#qdict[piece][board][row][column]
+# the qdict represents a 4 dimensional coordinate which returns a score
+# if that score doesn't exist the object is initialized
 xwins = False
 owins = False
-# swap shift and up and swap capslock and esc
-# figure out how to initialize this qmatrix
-# write a rough of the algorithm
+
+def boardL2T(board):
+	return tuple([tuple(b[:]) for b in board])
+
+def boardT2L(board):
+	return [list(b[:]) for b in board]
 
 def applyMove(r, c, piece, board):
 	# deep copy
-	board = [b[:] for b in board]
-	board[r][c] = piece
-	return board
+	board = boardT2L(board)
+	newBoard = [b[:] for b in board]
+	newBoard[r][c] = piece
+	return boardL2T(newBoard)
 
 def printBoard(board):
 	print board[0]
@@ -43,75 +52,50 @@ def nextMove(board, piece):
 					owins = piece == 'o'
 					print xwins, owins
 				moves.append((applyMove(r, c, piece, board), score))
+	print moves
 	return moves
 
 def getmax(moveslist):
 	best = max(moveslist, key=lambda x: x[1])
 	if best[1] == 0:
+		# if they're all 0 then randomly pick one
 		best = random.choice(moveslist)
 	return best
 
+gamma = 0.8
+initial = ((('', '', ''),('', '', ''),('', '', '')), 0)
+# an episode is a game
+def getNextBoardScore(boardScore, piece, printBool):
+		board, score = boardScore
+		nextBoardScore = getmax(nextMove(board, 'x'))
+		nextBoard, nextScore = nextBoardScore
+		qdict[piece][board] = score + (gamma * (nextScore - score))
+		# print for debug
+		if printBool:
+			print piece
+			printBoard(nextBoard)
+		return nextBoardScore
 
-def episode():
-	initial = [['', '', ''],['', '', ''],['', '', '']]
-	board = initial
+def episode(printBool):
+	xboardScore = ((('', '', ''),('', '', ''),('', '', '')), 0)
+	oboardScore = ((('', '', ''),('', '', ''),('', '', '')), 0)
 	xwins = False
 	owins = False
-	for i in range(5):
-		try:
-			board = getmax(nextMove(board, 'x'))[0]
-		except:
-			break
-		print 'x:'
-		printBoard(board)
+	# update matrix values
+	while not xwins and not owins:
+		xboardScore = getNextBoardScore(xboardScore, 'x', printBool)
 		if xwins:
 			xwins = False
 			break
-		try:
-			board = getmax(nextMove(board, 'o'))[0]
-		except:
-			break
-		print 'o:'
-		printBoard(board)
+		oboardScore = getNextBoardScore(oboardScore, 'o', printBool)
 		if owins:
 			owins = False
 			break
-	print 'game:', board
+	if printBool:
+		print 'game:', board
 
-# initial = [['', '', ''],['', '', ''],['', '', '']]
-# board = initial
-# for i in range(5):
-# 	try:
-# 		board = getmax(nextMove(board, 'x'))[0]
-# 	except:
-# 		break
-# 	print 'x:'
-# 	printBoard(board)
-# 	if xwins:
-# 		xwins = False
-# 		break
-# 	try:
-# 		board = getmax(nextMove(board, 'o'))[0]
-# 	except:
-# 		break
-# 	print 'o:'
-# 	printBoard(board)
-# 	if owins:
-# 		owins = False
-# 		break
-# print 'game:', board
+# for i in range(1000):
+# 	episode(False)
 
-
-
-
-
-
-# win = [['', 'x', ''],['o', 'x', 'o'],['', '', '']]
-# # print legalMoves(base)
-# # print legalMoves(first)
-# moves = nextMove(win, 'x')
-# gamma = 0.8
-# print moves
-# print getmax(moves)
-# episode
-# generate a random state
+for i in range(5):
+	episode(True)
