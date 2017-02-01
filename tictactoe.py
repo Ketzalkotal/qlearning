@@ -25,7 +25,7 @@ def applyMove(r, c, piece, board):
     newBoard[r][c] = piece
     return boardL2T(newBoard)
 
-def printBoard(board):
+def _printBoard(board):
     print board[0]
     print board[1]
     print board[2]
@@ -46,11 +46,12 @@ def qSet(piece, board, action, score):
 
 def qGet(piece, board, action):
     if not (board in qdict[piece]):
+        qdict[piece][board] = {action: 0}
         return 0
     if not (action in qdict[piece][board]):
+        qdict[piece][board][action] = 0
         return 0
-    else:
-        return qdict[piece][board][action]
+    return qdict[piece][board][action]
 
 def R(state, r, c, piece):
     board = applyMove(r, c, piece, state)
@@ -77,7 +78,10 @@ def R(state, r, c, piece):
 # all possible q scores is the list of all actions from statePrime
 
 def getMax(moveScores, piece):
-    best = max(moveScores, key=lambda x: x[1])
+    try:
+        best = max(moveScores, key=lambda x: x[1])
+    except:
+        return None
     if best[1] == 0:
         # if they're all 0 then randomly pick one
         best = random.choice(moveScores)
@@ -114,29 +118,34 @@ def evaluate(nboard, piece):
     return moveScore[1]
 
 def makeMove(board, piece, printBool):
-        moves = possibleMoves(board)
-        moveScores = getMovesQScores(board, moves, piece)
-        moveScore = getMax(moveScores, piece)
-        # move is best move from current board
-        move = moveScore[0]
-        qscore = moveScore[1]
-        # asdfasdf
-        nboard = applyMove(move[0], move[1], piece, board)
-        nqscore = evaluate(nboard, piece)
-        # move is best move from current board
-        score = R(board, move[0], move[1], piece) + (GAMMA * nqscore)
-        qSet(piece, board, action, score)
-        # print for debug
-        if printBool:
-            print 'piece', piece
-            printBoard(nextBoard)
-        return nextBoardScore
+    moves = possibleMoves(board)
+    moveScores = getMovesQScores(board, moves, piece)
+    moveScore = getMax(moveScores, piece)
+    # move is best move from current board
+    move = moveScore[0]
+    qscore = moveScore[1]
+    # asdfasdf
+    nboard = applyMove(move[0], move[1], piece, board)
+    nqscore = evaluate(nboard, piece)
+    # move is best move from current board
+    score = R(board, move[0], move[1], piece) + (GAMMA * nqscore)
+    if R(board, move[0], move[1], piece) == 100:
+        if piece is 'x':
+            xwins = True
+        if piece is 'o':
+            owins = True
+    qSet(piece, board, move, score)
+    # print for debug
+    if printBool:
+        print 'piece', piece
+        _printBoard(nboard)
+    return nboard
 
 # an episode is a game
 def episode(printBool):
+    global xwins
+    global owins
     board = (('', '', ''),('', '', ''),('', '', ''))
-    xwins = False
-    owins = False
     # update matrix values
     while not xwins and not owins:
         board = makeMove(board, 'x', printBool)
@@ -150,9 +159,6 @@ def episode(printBool):
             break
     if printBool:
         print 'game:', board
-
-# for i in range(1000):
-#   episode(False)
 
 for i in range(5):
     episode(True)
