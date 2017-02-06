@@ -1,10 +1,15 @@
 import unittest
 from collections import namedtuple
 import logging
-import copy
+import logging.handlers
 
-logging.basicConfig(
-    filename='v2.log', level=logging.INFO, format='%(asctime)s %(message)s')
+# logging.basicConfig(filename='v2.log', level=logging.INFO, format='%(asctime)s %(message)s')
+basic_logger = logging.getLogger('BasicLogger')
+basic_logger.setLevel(logging.DEBUG)
+handler = logging.handlers.RotatingFileHandler('v2.log', maxBytes=20*1024*1024, backupCount=1)
+handler.setFormatter(logging.Formatter('%(asctime)s %(message)s'))
+basic_logger.addHandler(handler)
+
 Move = namedtuple('Move', ['r', 'c'])
 
 
@@ -35,6 +40,28 @@ class Board(object):
     def setTup(self, tup):
         self.board = [x[:] for x in tup]
 
+    def winTrue(self, piece):
+        return ([piece, piece, piece] in
+                [[self.board[0][0], self.board[1][0], self.board[2][0]],
+                [self.board[0][1], self.board[1][1], self.board[2][1]],
+                [self.board[0][2], self.board[1][2], self.board[2][2]],
+                [self.board[0][0], self.board[1][1], self.board[2][2]],
+                [self.board[0][2], self.board[1][1], self.board[2][0]]] or
+                [piece, piece, piece] in self.board)
+
+    def isFull(self):
+        return not ('' in self.board[0] or
+                    '' in self.board[1] or
+                    '' in self.board[2])
+
+    def possibleMoves(self):
+        poss = []
+        for r, row in enumerate(self.board):
+            for c, piece in enumerate(row):
+                if piece == '':
+                    poss.append(Move(r,c))
+        return poss
+
     def __eq__(self, other):
         return self.__hash__() == other.__hash__()
 
@@ -63,26 +90,13 @@ class QDict(object):
             self.qdict[board.__hash__()][move] = 0
         self.qdict[board.__hash__()][move] = score
 
-
 def R(board, move, piece):
-    score = 0
     clone = board.clone()
-    r = move.r
-    c = move.c
+    clone.play(move, piece)
     # set reward for win states
-    # horizontal
-    if clone.board[r][(c - 1) % 3] == piece and clone.board[r][(c + 1) % 3] == piece:
-        score = 100
-    # vertical
-    if clone.board[(r - 1) % 3][c] == piece and clone.board[(r + 1) % 3][c] == piece:
-        score = 100
-    # diagonal to left
-    if r == c and clone.board[(r - 1) % 3][(c - 1) % 3] == piece and clone.board[(r + 1) % 3][(c + 1) % 3] == piece:
-        score = 100
-    # diagonal to right
-    if (r + 2) % 2 == (c - 2) % 2 and clone.board[(r - 1) % 3][(c + 1) % 3] == piece and clone.board[(r + 1) % 3][(c - 1) % 3] == piece:
-        score = 100
-    return score
+    if clone.winTrue(piece):
+        return 100
+    return 0
 
 class BoardTest(unittest.TestCase):
 
@@ -128,36 +142,57 @@ class BoardTest(unittest.TestCase):
 
     def test_win_diagonal(self):
         board = Board()
-        board.play(Move(0,0), 'x')
-        board.play(Move(1,1), 'x')
-        self.assertTrue(R(board, Move(2,2), 'x') == 100)
+        board.play(Move(0, 0), 'x')
+        board.play(Move(1, 1), 'x')
+        self.assertTrue(R(board, Move(2, 2), 'x') == 100)
 
     def test_win_forward_diagonal(self):
         board = Board()
-        board.play(Move(0,2), 'x')
-        board.play(Move(1,1), 'x')
-        self.assertTrue(R(board, Move(2,0), 'x') == 100)
+        board.play(Move(0, 2), 'x')
+        board.play(Move(1, 1), 'x')
+        self.assertTrue(R(board, Move(2, 0), 'x') == 100)
 
     def test_win_horizontal(self):
         board = Board()
-        board.play(Move(0,0), 'x')
-        board.play(Move(0,1), 'x')
-        self.assertTrue(R(board, Move(0,2), 'x') == 100)
+        board.play(Move(0, 0), 'x')
+        board.play(Move(0, 1), 'x')
+        self.assertTrue(R(board, Move(0, 2), 'x') == 100)
 
     def test_no_win_horizontal(self):
         board = Board()
-        board.play(Move(1,0), 'x')
-        board.play(Move(0,1), 'x')
-        self.assertTrue(R(board, Move(0,2), 'x') == 0)
+        board.play(Move(1, 0), 'x')
+        board.play(Move(0, 1), 'x')
+        self.assertTrue(R(board, Move(0, 2), 'x') == 0)
+
+    def test_is_full(self):
+        board = Board()
+        board.board = [['x','x','x'],['x','x','x'],['x','x','x']]
+        self.assertTrue(board.isFull())
+
+    def test_is_not_full(self):
+        board = Board()
+        self.assertFalse(board.isFull())
+
+    @unittest.skip('not finished yet')
+    def test_poss_moves(self):
+        board = Board()
+        board.board = [['x','','x'],['x','x','x'],['x','x','x']]
+        basic_logger.info(board.possibleMoves())
+        self.assertFalse(True)
+
+qdicts = {'x': QDict(), 'o': QDict()}
+def episode():
+    board = Board()
+    while not (board.winTrue('x') or board.winTrue('o') or board.isFull()):
+        board.qplay(qdicts['x'], 'x')
+        board.qplay(qdicts['o'], 'o')
 
 if __name__ == '__main__':
-    qdicts = {'x': QDict(), 'o': QDict()}
 
     board = Board()
-    move = Move(1, 1)
-
+    move = Move(1,1)
     qdicts['x'].setScore(board, move, 50)
     board.play(move, 'x')
 
-    logging.info(qdicts['x'].qdict)
-    logging.info(qdicts['x'].getScore(Board(), Move(1, 1)))
+    basic_logger.info(qdicts['x'].qdict)
+    basic_logger.info(qdicts['x'].getScore(Board(), Move(1, 1)))
