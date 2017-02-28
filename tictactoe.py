@@ -1,4 +1,7 @@
 import random
+import traceback
+
+random.seed(1000)
 
 #qdict[(board, piece)][(row,column)] = score
 #qdict[piece][board][(row,column)] = score
@@ -20,8 +23,8 @@ def boardT2L(board):
 
 def applyMove(r, c, piece, board):
     # deep copy
-    board = boardT2L(board)
-    newBoard = [b[:] for b in board]
+    aboard = boardT2L(board)
+    newBoard = [b[:] for b in aboard]
     newBoard[r][c] = piece
     return boardL2T(newBoard)
 
@@ -36,6 +39,9 @@ def possibleMoves(board):
         for c, cell in enumerate(row):
             if cell is '':
                 moves.append((r, c))
+    if moves is []:
+        print 'moves is empty'
+        print traceback.format_exc()
     return moves
 
 def qSet(piece, board, action, score):
@@ -76,11 +82,14 @@ def R(state, r, c, piece):
 # Q(state, action) = R(state, action) + (gamma * max(all possible q scores from statePrime))
 # statePrime is the state after action is applied
 # all possible q scores is the list of all actions from statePrime
-
 def getMax(moveScores, piece):
+    if len(moveScores) == 0:
+        return None
     try:
         best = max(moveScores, key=lambda x: x[1])
     except:
+        print 'ms:', moveScores
+        print traceback.format_exc()
         return None
     if best[1] == 0:
         # if they're all 0 then randomly pick one
@@ -106,15 +115,22 @@ def evaluate(nboard, piece):
     # what this should do is randomly place opposing piece everywhere
     # then evaluate next best move
     opponent = 'o' if piece is 'x' else 'x'
+    print 'currentBoard', _printBoard(nboard), 'opponent', opponent
     opponentMoves = possibleMoves(nboard)
+    print 'opponentMoves', opponentMoves
     boardPrimes = []
     for move in opponentMoves:
         r = move[0]
         c = move[1]
         oboard = applyMove(r, c, opponent, nboard)
+        print 'oboard', oboard
         moveScores = getMovesQScores(oboard, possibleMoves(oboard), piece)
+        print 'moveScores', moveScores
         moveScore = getMax(moveScores, piece)
     # is highest possible score
+    print 'movescore:', moveScore
+    if moveScore is None:
+        return None
     return moveScore[1]
 
 def makeMove(board, piece, printBool):

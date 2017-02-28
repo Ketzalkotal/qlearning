@@ -2,13 +2,16 @@ import unittest
 from collections import namedtuple
 import logging
 import logging.handlers
+import random
+
+# random.seed(1000)
 
 # logging.basicConfig(filename='v2.log', level=logging.INFO, format='%(asctime)s %(message)s')
-basic_logger = logging.getLogger('BasicLogger')
-basic_logger.setLevel(logging.DEBUG)
-handler = logging.handlers.RotatingFileHandler('v2.log', maxBytes=20*1024*1024, backupCount=1)
+logger = logging.getLogger('BasicLogger')
+logger.setLevel(logging.DEBUG)
+handler = logging.handlers.RotatingFileHandler('v2.log', maxBytes=2*1024*1024, backupCount=2)
 handler.setFormatter(logging.Formatter('%(asctime)s %(message)s'))
-basic_logger.addHandler(handler)
+logger.addHandler(handler)
 
 Move = namedtuple('Move', ['r', 'c'])
 
@@ -34,10 +37,10 @@ class Board(object):
         newboard.board = [x[:] for x in self.board]
         return newboard
 
-    def getTup(self):
+    def _getTup(self):
         return tuple([tuple(x[:]) for x in self.board])
 
-    def setTup(self, tup):
+    def _setTup(self, tup):
         self.board = [x[:] for x in tup]
 
     def winTrue(self, piece):
@@ -62,6 +65,63 @@ class Board(object):
                     poss.append(Move(r,c))
         return poss
 
+    def bellman(self, qdict, move, piece):
+        Qexpected = [0]
+        opponent = 'o' if piece == 'x' else 'x'
+        board = self.clone()
+        boardA = self.clone()
+        currentScore = qdict.getScore(boardA, move)
+
+        if boardA.play(move, piece):
+            for opponentMove in boardA.possibleMoves():
+                boardB = boardA.clone()
+                boardB.play(opponentMove, opponent)
+                for movePrime in boardB.possibleMoves():
+                    Qexpected.append(qdict.getScore(boardB, movePrime))
+
+            score = R(board, move, piece) + (qdict.gamma * (max(Qexpected) - currentScore))
+            qdict.setScore(board, move, score)
+            return True
+        return False
+
+    def qlearn(self, qdict, piece):
+        if self.isFull():
+            return None
+        opponent = 'x' if piece == 'o' else 'o'
+        possibleMoves = self.possibleMoves()
+        if len(possibleMoves) == 1:
+            self.play(possibleMoves[0], piece)
+            return True
+            # no moves left
+        if len(possibleMoves) == 0:
+            # no moves left
+            return False
+        # eventually this must take a gamma to
+        # control the randomness to minimize the randomness over time
+        move = random.choice(possibleMoves)
+        self.bellman(qdict, move, piece)
+        self.play(move, piece)
+
+    def qplay(self, qdict, piece):
+        if self.isFull():
+            return None
+        opponent = 'x' if piece == 'o' else 'o'
+        possibleMoves = self.possibleMoves()
+        if len(possibleMoves) == 1:
+            self.play(possibleMoves[0], piece)
+            return True
+            # no moves left
+        if len(possibleMoves) == 0:
+            # no moves left
+            return False
+        candidates = []
+        ms = (random.choice(possibleMoves),0)
+        for move in possibleMoves:
+            score = qdict.getScore(self, move)
+            if score > ms[1]:
+                ms = (move, score)
+        self.play(ms[0], piece)
+
     def __eq__(self, other):
         return self.__hash__() == other.__hash__()
 
@@ -74,14 +134,18 @@ class Board(object):
 
 class QDict(object):
 
-    def __init__(self):
+    def __init__(self, gamma=0.8):
         self.qdict = {}
+        self.gamma = gamma
 
     def getBoard(self, board):
-        return self.qdict.get(board.__hash__(), None)
+        return self.qdict.get(board._getTup(), 0)
 
     def getScore(self, board, move):
-        return self.qdict[board.__hash__()][move]
+        result = 0
+        if board.__hash__() in self.qdict:
+            result = self.qdict[board.__hash__()].get(move, 0)
+        return result
 
     def setScore(self, board, move, score):
         if not (board in self.qdict):
@@ -177,22 +241,28 @@ class BoardTest(unittest.TestCase):
     def test_poss_moves(self):
         board = Board()
         board.board = [['x','','x'],['x','x','x'],['x','x','x']]
-        basic_logger.info(board.possibleMoves())
+        logger.info(board.possibleMoves())
         self.assertFalse(True)
 
 qdicts = {'x': QDict(), 'o': QDict()}
 def episode():
     board = Board()
     while not (board.winTrue('x') or board.winTrue('o') or board.isFull()):
+        board.qlearn(qdicts['x'], 'x')
+        board.qlearn(qdicts['o'], 'o')
+
+def game():
+    board = Board()
+    while not (board.winTrue('x') or board.winTrue('o') or board.isFull()):
         board.qplay(qdicts['x'], 'x')
         board.qplay(qdicts['o'], 'o')
+        print board
+        print ''
 
 if __name__ == '__main__':
 
-    board = Board()
-    move = Move(1,1)
-    qdicts['x'].setScore(board, move, 50)
-    board.play(move, 'x')
+    for i in range(10000):
+        episode()
 
-    basic_logger.info(qdicts['x'].qdict)
-    basic_logger.info(qdicts['x'].getScore(Board(), Move(1, 1)))
+    for i in range(3):
+        game()
