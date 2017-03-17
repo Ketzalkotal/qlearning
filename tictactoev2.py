@@ -70,7 +70,7 @@ class Board(object):
         opponent = 'o' if piece == 'x' else 'x'
         board = self.clone()
         boardA = self.clone()
-        currentScore = qdict.getScore(boardA, move)
+        # currentScore = qdict.getScore(boardA, move)
 
         if boardA.play(move, piece):
             for opponentMove in boardA.possibleMoves():
@@ -79,7 +79,7 @@ class Board(object):
                 for movePrime in boardB.possibleMoves():
                     Qexpected.append(qdict.getScore(boardB, movePrime))
 
-            score = R(board, move, piece) + (qdict.gamma * (max(Qexpected) - currentScore))
+            score = R(board, move, piece, opponent) + (qdict.gamma * (max(Qexpected)))
             qdict.setScore(board, move, score)
             return True
         return False
@@ -120,13 +120,14 @@ class Board(object):
             score = qdict.getScore(self, move)
             if score > ms[1]:
                 ms = (move, score)
+        print ms[1]
         self.play(ms[0], piece)
 
     def __eq__(self, other):
-        return self.__hash__() == other.__hash__()
+        return self._getTup() == other
 
     def __ne__(self, other):
-        return not (self.__hash__() == other.__hash__())
+        return not (self._getTup() == other)
 
     def __str__(self):
         return '\n'.join([str(row) for row in self.board])
@@ -143,21 +144,26 @@ class QDict(object):
 
     def getScore(self, board, move):
         result = 0
-        if board.__hash__() in self.qdict:
-            result = self.qdict[board.__hash__()].get(move, 0)
+        if board._getTup() in self.qdict:
+            result = self.qdict[board._getTup()].get(move, 0)
         return result
 
     def setScore(self, board, move, score):
         if not (board in self.qdict):
-            self.qdict[board.__hash__()] = {}
+            self.qdict[board._getTup()] = {}
         if not (move in self.qdict[board]):
-            self.qdict[board.__hash__()][move] = 0
-        self.qdict[board.__hash__()][move] = score
+            self.qdict[board._getTup()][move] = 0
+        self.qdict[board._getTup()][move] = score
 
-def R(board, move, piece):
+def R(board, move, piece, opponent):
     clone = board.clone()
     clone.play(move, piece)
     # set reward for win states
+    for oMove in clone.possibleMoves():
+        opponentClone = clone.clone()
+        opponentClone.play(oMove, opponent)
+        if opponentClone.winTrue(opponent):
+            return -100
     if clone.winTrue(piece):
         return 100
     return 0
@@ -249,14 +255,19 @@ def episode():
     board = Board()
     while not (board.winTrue('x') or board.winTrue('o') or board.isFull()):
         board.qlearn(qdicts['x'], 'x')
+        if board.winTrue('x'):
+            break
         board.qlearn(qdicts['o'], 'o')
 
 def game():
     board = Board()
     while not (board.winTrue('x') or board.winTrue('o') or board.isFull()):
         board.qplay(qdicts['x'], 'x')
+        print 'x\n', board
+        if board.winTrue('x'):
+            break
         board.qplay(qdicts['o'], 'o')
-        print board
+        print 'o\n', board
         print ''
 
 if __name__ == '__main__':
@@ -264,5 +275,9 @@ if __name__ == '__main__':
     for i in range(10000):
         episode()
 
+    print qdicts['x'].qdict.items()[:10]
+    import pdb; pdb.set_trace()
+
     for i in range(3):
         game()
+        print 'endgame'
