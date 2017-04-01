@@ -25,3 +25,45 @@ This Q-matrix ranks X's moves, and it does so by assigning a score to each possi
 Here we see that it ranks the winning move r2c1 as being the highest from this board state with a score of 100.
 The two moves which lead to a possible win in one move, r2c0 and r0c2, are ranked lower with 80s.
 The remaining moves which don't lead to immediate victories and are ranked 0.
+
+# Example Game
+    x
+    ['x', '', '']
+    ['', '', '']
+    ['', '', '']
+    64.0
+    o
+    ['x', '', 'o']
+    ['', '', '']
+    ['', '', '']
+
+    80.0
+    x
+    ['x', '', 'o']
+    ['x', '', '']
+    ['', '', '']
+    80.0
+    o
+    ['x', '', 'o']
+    ['x', '', '']
+    ['o', '', '']
+
+    80.0
+    x
+    ['x', '', 'o']
+    ['x', 'x', '']
+    ['o', '', '']
+    0
+    o
+    ['x', '', 'o']
+    ['x', 'x', 'o']
+    ['o', '', '']
+
+    100.0
+    x
+    ['x', '', 'o']
+    ['x', 'x', 'o']
+    ['o', '', 'x']
+    endgame
+
+The numbers represent the score of each taken move.
