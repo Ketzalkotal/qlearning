@@ -1,180 +1,189 @@
+from collections import namedtuple
 import random
-import traceback
 
 random.seed(1000)
 
-#qdict[(board, piece)][(row,column)] = score
-#qdict[piece][board][(row,column)] = score
-#board = ((),(),())
-qdict = {'x':{}, 'o':{}}
+Move = namedtuple('Move', ['r', 'c'])
 
-#qdict = {'x': [[ ]], 'o': {}}
-#qdict['x'][0][0][(board)]
-# the qdict represents a 4 dimensional coordinate which returns a score
-# if that score doesn't exist the object is initialized
-xwins = False
-owins = False
+class Board(object):
 
-def boardL2T(board):
-    return tuple([tuple(b[:]) for b in board])
+    def __init__(self):
+        self.board = [['', '', ''], ['', '', ''], ['', '', '']]
 
-def boardT2L(board):
-    return [list(b[:]) for b in board]
+    def play(self, move, piece):
+        if self.board[move.r][move.c] == '':
+            self.board[move.r][move.c] = piece
+            return True
+        # illegal move
+        return False
 
-def applyMove(r, c, piece, board):
-    # deep copy
-    aboard = boardT2L(board)
-    newBoard = [b[:] for b in aboard]
-    newBoard[r][c] = piece
-    return boardL2T(newBoard)
+    def __hash__(self):
+        b = self.clone()
+        return tuple([tuple(x[:]) for x in b.board]).__hash__()
 
-def _printBoard(board):
-    print board[0]
-    print board[1]
-    print board[2]
+    def clone(self):
+        newboard = Board()
+        newboard.board = [x[:] for x in self.board]
+        return newboard
 
-def possibleMoves(board):
-    moves = []
-    for r, row in enumerate(board):
-        for c, cell in enumerate(row):
-            if cell is '':
-                moves.append((r, c))
-    if moves is []:
-        print 'moves is empty'
-        print traceback.format_exc()
-    return moves
+    def _getTup(self):
+        return tuple([tuple(x[:]) for x in self.board])
 
-def qSet(piece, board, action, score):
-    if not (board in qdict[piece]):
-        qdict[piece] = {board: {action: score}}
-    else:
-        qdict[piece][board][action] = score
+    def _setTup(self, tup):
+        self.board = [x[:] for x in tup]
 
-def qGet(piece, board, action):
-    if not (board in qdict[piece]):
-        qdict[piece][board] = {action: 0}
-        return 0
-    if not (action in qdict[piece][board]):
-        qdict[piece][board][action] = 0
-        return 0
-    return qdict[piece][board][action]
+    def winTrue(self, piece):
+        return ([piece, piece, piece] in
+                [[self.board[0][0], self.board[1][0], self.board[2][0]],
+                [self.board[0][1], self.board[1][1], self.board[2][1]],
+                [self.board[0][2], self.board[1][2], self.board[2][2]],
+                [self.board[0][0], self.board[1][1], self.board[2][2]],
+                [self.board[0][2], self.board[1][1], self.board[2][0]]] or
+                [piece, piece, piece] in self.board)
 
-def R(state, r, c, piece):
-    board = applyMove(r, c, piece, state)
-    score = 0
+    def isFull(self):
+        return not ('' in self.board[0] or
+                    '' in self.board[1] or
+                    '' in self.board[2])
+
+    def possibleMoves(self):
+        poss = []
+        for r, row in enumerate(self.board):
+            for c, piece in enumerate(row):
+                if piece == '':
+                    poss.append(Move(r,c))
+        return poss
+
+    def bellman(self, qdict, move, piece):
+        Qexpected = [0]
+        opponent = 'o' if piece == 'x' else 'x'
+        board = self.clone()
+        boardA = self.clone()
+        # currentScore = qdict.getScore(boardA, move)
+
+        if boardA.play(move, piece):
+            for opponentMove in boardA.possibleMoves():
+                boardB = boardA.clone()
+                boardB.play(opponentMove, opponent)
+                for movePrime in boardB.possibleMoves():
+                    Qexpected.append(qdict.getScore(boardB, movePrime))
+
+            score = R(board, move, piece, opponent) + (qdict.gamma * (max(Qexpected)))
+            qdict.setScore(board, move, score)
+            return True
+        return False
+
+    def qlearn(self, qdict, piece):
+        if self.isFull():
+            return None
+        opponent = 'x' if piece == 'o' else 'o'
+        possibleMoves = self.possibleMoves()
+        if len(possibleMoves) == 1:
+            self.play(possibleMoves[0], piece)
+            return True
+            # no moves left
+        if len(possibleMoves) == 0:
+            # no moves left
+            return False
+        # eventually this must take a gamma to
+        # control the randomness to minimize the randomness over time
+        move = random.choice(possibleMoves)
+        self.bellman(qdict, move, piece)
+        self.play(move, piece)
+
+    def qplay(self, qdict, piece):
+        if self.isFull():
+            return None
+        opponent = 'x' if piece == 'o' else 'o'
+        possibleMoves = self.possibleMoves()
+        if len(possibleMoves) == 1:
+            self.play(possibleMoves[0], piece)
+            return True
+            # no moves left
+        if len(possibleMoves) == 0:
+            # no moves left
+            return False
+        candidates = []
+        ms = (random.choice(possibleMoves),0)
+        for move in possibleMoves:
+            score = qdict.getScore(self, move)
+            if score > ms[1]:
+                ms = (move, score)
+        print ms[1]
+        self.play(ms[0], piece)
+
+    def __eq__(self, other):
+        return self._getTup() == other
+
+    def __ne__(self, other):
+        return not (self._getTup() == other)
+
+    def __str__(self):
+        return '\n'.join([str(row) for row in self.board])
+
+
+class QDict(object):
+
+    def __init__(self, gamma=0.8):
+        self.qdict = {}
+        self.gamma = gamma
+
+    def getBoard(self, board):
+        return self.qdict.get(board._getTup(), 0)
+
+    def getScore(self, board, move):
+        result = 0
+        if board._getTup() in self.qdict:
+            result = self.qdict[board._getTup()].get(move, 0)
+        return result
+
+    def setScore(self, board, move, score):
+        if not (board in self.qdict):
+            self.qdict[board._getTup()] = {}
+        if not (move in self.qdict[board]):
+            self.qdict[board._getTup()][move] = 0
+        self.qdict[board._getTup()][move] = score
+
+def R(board, move, piece, opponent):
+    clone = board.clone()
+    clone.play(move, piece)
     # set reward for win states
-    # horizontal
-    if board[r][(c - 1) % 3] == piece and board[r][(c + 1) % 3] == piece:
-        score = 100
-    # vertical
-    if board[(r - 1) % 3][c] == piece and board[(r + 1) % 3][c] == piece:
-        score = 100
-    # diagonal to left
-    if r == c and board[(r - 1) % 3][(c - 1) % 3] == piece and board[(r + 1) % 3][(c + 1) % 3] == piece:
-        score = 100
-    # diagonal to right
-    if (r + 2) % 2 == (c - 2) % 2 and board[(r - 1) % 3][(c + 1) % 3] == piece and board[(r + 1) % 3][(c - 1) % 3] == piece:
-        score = 100
-    return score
+    for oMove in clone.possibleMoves():
+        opponentClone = clone.clone()
+        opponentClone.play(oMove, opponent)
+        if opponentClone.winTrue(opponent):
+            return -100
+    if clone.winTrue(piece):
+        return 100
+    return 0
 
-# you need next move q matrix
-
-# Q(state, action) = R(state, action) + (gamma * max(all possible q scores from statePrime))
-# statePrime is the state after action is applied
-# all possible q scores is the list of all actions from statePrime
-def getMax(moveScores, piece):
-    if len(moveScores) == 0:
-        return None
-    try:
-        best = max(moveScores, key=lambda x: x[1])
-    except:
-        print 'ms:', moveScores
-        print traceback.format_exc()
-        return None
-    if best[1] == 0:
-        # if they're all 0 then randomly pick one
-        best = random.choice(moveScores)
-    return best
-
-gamma = 0.8
-GAMMA = gamma
-
-def getMovesQScores(board, moves, piece):
-    moveScores = []
-    for move in moves:
-        moveScores.append((move, qGet(piece, board, move)))
-    return moveScores
-
-def getMovesRScores(board, moves, piece):
-    moveScores = []
-    for move in moves:
-        moveScores.append((move, R(board, move[0], move[1], piece)))
-    return moveScores
-
-def evaluate(nboard, piece):
-    # what this should do is randomly place opposing piece everywhere
-    # then evaluate next best move
-    opponent = 'o' if piece is 'x' else 'x'
-    print 'currentBoard', _printBoard(nboard), 'opponent', opponent
-    opponentMoves = possibleMoves(nboard)
-    print 'opponentMoves', opponentMoves
-    boardPrimes = []
-    for move in opponentMoves:
-        r = move[0]
-        c = move[1]
-        oboard = applyMove(r, c, opponent, nboard)
-        print 'oboard', oboard
-        moveScores = getMovesQScores(oboard, possibleMoves(oboard), piece)
-        print 'moveScores', moveScores
-        moveScore = getMax(moveScores, piece)
-    # is highest possible score
-    print 'movescore:', moveScore
-    if moveScore is None:
-        return None
-    return moveScore[1]
-
-def makeMove(board, piece, printBool):
-    moves = possibleMoves(board)
-    moveScores = getMovesQScores(board, moves, piece)
-    moveScore = getMax(moveScores, piece)
-    # move is best move from current board
-    move = moveScore[0]
-    qscore = moveScore[1]
-    # asdfasdf
-    nboard = applyMove(move[0], move[1], piece, board)
-    nqscore = evaluate(nboard, piece)
-    # move is best move from current board
-    score = R(board, move[0], move[1], piece) + (GAMMA * nqscore)
-    if R(board, move[0], move[1], piece) == 100:
-        if piece is 'x':
-            xwins = True
-        if piece is 'o':
-            owins = True
-    qSet(piece, board, move, score)
-    # print for debug
-    if printBool:
-        print 'piece', piece
-        _printBoard(nboard)
-    return nboard
-
-# an episode is a game
-def episode(printBool):
-    global xwins
-    global owins
-    board = (('', '', ''),('', '', ''),('', '', ''))
-    # update matrix values
-    while not xwins and not owins:
-        board = makeMove(board, 'x', printBool)
-        # I want to pass the board between the two players
-        if xwins:
-            xwins = False
+qdicts = {'x': QDict(), 'o': QDict()}
+def episode():
+    board = Board()
+    while not (board.winTrue('x') or board.winTrue('o') or board.isFull()):
+        board.qlearn(qdicts['x'], 'x')
+        if board.winTrue('x'):
             break
-        board = makeMove(board, 'o', printBool)
-        if owins:
-            owins = False
-            break
-    if printBool:
-        print 'game:', board
+        board.qlearn(qdicts['o'], 'o')
 
-for i in range(5):
-    episode(True)
+def game():
+    board = Board()
+    while not (board.winTrue('x') or board.winTrue('o') or board.isFull()):
+        board.qplay(qdicts['x'], 'x')
+        print 'x\n', board
+        if board.winTrue('x'):
+            break
+        board.qplay(qdicts['o'], 'o')
+        print 'o\n', board
+        print ''
+
+if __name__ == '__main__':
+
+    for i in range(10000):
+        episode()
+
+    print qdicts['x'].qdict.items()[:10]
+
+    for i in range(3):
+        game()
+        print 'endgame'
